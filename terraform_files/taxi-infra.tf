@@ -1,8 +1,12 @@
-provider "aws" {
+provider "aws"  {
   region = "us-east-1"
 }
 data "aws_vpc" "default" {
   default = true
+}
+data "aws_availability_zones" "supported" {
+  state       = "available"
+  exclude_names = ["us-east-1e"]
 }
 
 # Get default subnets
@@ -11,6 +15,11 @@ data "aws_subnets" "default" {
     name   = "vpc-id"
     values = [data.aws_vpc.default.id]
   }
+  filter {
+    name   = "availability-zone"
+    values = data.aws_availability_zones.supported.names
+  }
+
 }
 
 resource "aws_instance" "ansible" {
@@ -106,4 +115,22 @@ resource "aws_security_group" "demo-sg" {
 
   }
 }
+module "sgs" {
+  source = "../sg_eks"
+  vpc_id = data.aws_vpc.default.id
+}
+
+# EKS Cluster Module
+module "eks" {
+  source     = "../eks"
+  vpc_id     = data.aws_vpc.default.id
+  subnet_ids = data.aws_subnets.default.ids
+  sg_ids     = module.sgs.security_group_public
+}
+
+
+output "eks_cluster_endpoint" {
+  value = module.eks.endpoint
+}
+  
 
